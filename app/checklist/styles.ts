@@ -199,4 +199,72 @@ export const styles = StyleSheet.create({
     color: "white",
     fontWeight: "600",
   },
+  titleContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  headerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    marginRight: 8,
+    marginTop: 16,
+  },
+  editImageButton: {
+    padding: 4,
+  },
+  removeImageButton: {
+    backgroundColor: "#ff4444",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  removeImageText: {
+    color: "white",
+    fontWeight: "600",
+  },
+  disabledTask: {
+    backgroundColor: "#f0f0f0",
+    opacity: 0.6,
+  },
+  disabledTaskText: {
+    color: "#999",
+    textDecorationLine: "line-through",
+  },
+  disabledIconContainer: {
+    marginRight: 8,
+  },
+  cancelIconContainer: {
+    marginRight: 8,
+  },
+  submitButton: {
+    backgroundColor: "#4CAF50",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  submitButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  leftContainer: {
+    width: 50,
+    alignItems: "flex-start",
+  },
+  rightContainer: {
+    width: 90,
+    alignItems: "flex-end",
+    paddingTop: 16,
+    paddingRight: 2,
+  },
+  backButtonLeft: {
+    padding: 8,
+  },
 });

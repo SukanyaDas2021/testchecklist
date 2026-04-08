@@ -10,7 +10,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="checklist/[id]"
-            options={{ title: "Checklist" }}
+            options={{ headerShown: false }}
           />
         </Stack>
       </ChecklistProvider>

@@ -38,9 +38,13 @@ export default function ChecklistDetail() {
   const id = typeof params.id === "string" ? params.id : params.id?.[0];
   const mode =
     typeof params.mode === "string" ? params.mode : params.mode?.[0] || "view";
+  const ongoing =
+    typeof params.ongoing === "string" ? params.ongoing : params.ongoing?.[0];
 
   const numericId = Number(id);
   const isEditMode = mode === "edit";
+  const isOngoingEdit = isEditMode && ongoing === "true";
+  const isNormalEdit = isEditMode && !isOngoingEdit;
 
   const {
     getChecklistById,
@@ -49,10 +53,11 @@ export default function ChecklistDetail() {
     deleteItem,
     editItem,
     reorderItems,
+    updateChecklistImage,
     startSchedule,
     completeCurrentTask,
     getActiveScheduleState,
-    updateChecklistImage,
+    disableTask,
   } = useChecklist();
 
   const checklist = getChecklistById(numericId);
@@ -68,19 +73,26 @@ export default function ChecklistDetail() {
   const [editImageUri, setEditImageUri] = useState(null);
   const [activeState, setActiveState] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
-
   const [checklistImageUri, setChecklistImageUri] = useState<string | null>(
-    checklist.image || null,
+    checklist?.image || null,
   );
   const [checklistImageModalVisible, setChecklistImageModalVisible] =
     useState(false);
+
+  // Temporary state for ongoing edit changes
+  const [tempDisabledTaskIds, setTempDisabledTaskIds] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (checklist) {
       const state = getActiveScheduleState(checklist.id);
       setActiveState(state);
+      // Initialize temp disabled tasks with current disabled tasks when entering ongoing edit
+      if (isOngoingEdit && state) {
+        setTempDisabledTaskIds(state.disabledTaskIds || []);
+      }
     }
-  }, [checklist, getActiveScheduleState]);
+  }, [checklist, getActiveScheduleState, isOngoingEdit]);
 
   if (!checklist) {
     return (
@@ -114,6 +126,23 @@ export default function ChecklistDetail() {
 
   const handleRemoveImageInEdit = () => {
     setEditImageUri(null);
+  };
+
+  const handlePickChecklistImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      setChecklistImageUri(result.assets[0].uri);
+      updateChecklistImage(checklist.id, result.assets[0].uri);
+    }
+  };
+
+  const handleRemoveChecklistImage = () => {
+    setChecklistImageUri(null);
+    updateChecklistImage(checklist.id, null);
   };
 
   const handleAddTask = () => {
@@ -174,28 +203,106 @@ export default function ChecklistDetail() {
     }
   };
 
-  const handlePickChecklistImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-    if (!result.canceled) {
-      setChecklistImageUri(result.assets[0].uri);
-      updateChecklistImage(checklist.id, result.assets[0].uri);
+  const handleEditButtonPress = () => {
+    Alert.alert(
+      "Edit Ongoing Schedule",
+      "Are you sure you want to edit an ongoing schedule?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes",
+          onPress: () =>
+            router.push(`/checklist/${checklist.id}?mode=edit&ongoing=true`),
+        },
+      ],
+    );
+  };
+
+  const handleGoBack = () => {
+    if (hasUnsavedChanges) {
+      Alert.alert(
+        "Unsaved Changes",
+        "You have unsaved changes. Are you sure you want to go back?",
+        [
+          { text: "Stay", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: () => {
+              setTempDisabledTaskIds([]);
+              setHasUnsavedChanges(false);
+              router.back(); //router.replace(`/checklist/${checklist.id}?mode=view`);
+            },
+          },
+        ],
+      );
+    } else {
+      router.back(); //router.replace(`/checklist/${checklist.id}?mode=view`);
     }
   };
 
-  const handleRemoveChecklistImage = () => {
-    setChecklistImageUri(null);
-    updateChecklistImage(checklist.id, null);
+  const handleSubmitChanges = () => {
+    Alert.alert(
+      "Confirm Changes",
+      "Are you sure you want to apply these changes to the ongoing schedule?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes",
+          onPress: () => {
+            const originalDisabledIds = activeState?.disabledTaskIds || [];
+            const newDisabledIds = tempDisabledTaskIds.filter(
+              (id) => !originalDisabledIds.includes(id),
+            );
+
+            newDisabledIds.forEach((taskId) => {
+              disableTask(checklist.id, taskId);
+            });
+
+            setHasUnsavedChanges(false);
+            router.back(); // Go back to the original view mode screen
+          },
+        },
+      ],
+    );
   };
 
+  const handleCancelTask = (taskId) => {
+    // Update temp state instead of actual state
+    if (!tempDisabledTaskIds.includes(taskId)) {
+      setTempDisabledTaskIds([...tempDisabledTaskIds, taskId]);
+      setHasUnsavedChanges(true);
+    }
+  };
+
+  const isTaskDisabled = (taskId) => {
+    // Check temp state during ongoing edit, otherwise check actual state
+    if (isOngoingEdit) {
+      return tempDisabledTaskIds.includes(taskId);
+    }
+    return activeState?.disabledTaskIds?.includes(taskId) || false;
+  };
+
+  const shouldShowCancelIcon = (item, index) => {
+    if (!isOngoingEdit) return false;
+    if (item.checked) return false;
+    if (isTaskDisabled(item.id)) return false;
+    if (index <= activeState?.currentTaskIndex) return false;
+    return true;
+  };
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
+        <View style={styles.leftContainer}>
+          <TouchableOpacity
+            onPress={handleGoBack}
+            style={styles.backButtonLeft}
+          >
+            <Icon name="arrow-back" size={24} color="#76088b" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.titleContainer}>
-          {isEditMode && (
+          {isNormalEdit && (
             <TouchableOpacity
               onPress={() => setChecklistImageModalVisible(true)}
               style={styles.editImageButton}
@@ -211,31 +318,41 @@ export default function ChecklistDetail() {
           )}
           <Text style={styles.title}>{checklist.name}</Text>
         </View>
-        {isEditMode ? (
-          <TouchableOpacity
-            style={styles.addTaskButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Text style={styles.addTaskButtonText}>Add Task</Text>
-          </TouchableOpacity>
-        ) : !activeState?.isActive ? (
-          <TouchableOpacity
-            style={styles.addTaskButton}
-            onPress={() => {
-              startSchedule(checklist.id);
-              setActiveState(getActiveScheduleState(checklist.id));
-            }}
-          >
-            <Text style={styles.addTaskButtonText}>Start Schedule</Text>
-          </TouchableOpacity>
-        ) : null}
+        <View style={styles.rightContainer}>
+          {isNormalEdit ? (
+            <TouchableOpacity
+              style={styles.addTaskButton}
+              onPress={() => setModalVisible(true)}
+            >
+              <Text style={styles.addTaskButtonText}>Add Task</Text>
+            </TouchableOpacity>
+          ) : !activeState?.isActive ? (
+            <TouchableOpacity
+              style={styles.addTaskButton}
+              onPress={() => {
+                startSchedule(checklist.id);
+                setActiveState(getActiveScheduleState(checklist.id));
+              }}
+            >
+              <Text style={styles.addTaskButtonText}>Start</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.addTaskButton}
+              onPress={handleEditButtonPress}
+            >
+              <Text style={styles.addTaskButtonText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {checklist.items.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No tasks yet</Text>
         </View>
-      ) : isEditMode ? (
+      ) : isNormalEdit ? (
+        // NORMAL EDIT MODE - Drag, edit, delete tasks
         <DraggableFlatList
           data={checklist.items}
           keyExtractor={(item) => item.id.toString()}
@@ -284,21 +401,38 @@ export default function ChecklistDetail() {
           )}
         />
       ) : (
+        // VIEW MODE OR ONGOING EDIT MODE
         <FlatList
           data={checklist.items}
           keyExtractor={(item) => item.id.toString()}
+          ListFooterComponent={
+            isOngoingEdit ? (
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleSubmitChanges}
+              >
+                <Text style={styles.submitButtonText}>Submit</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           renderItem={({ item, index }) => {
             const isHighlighted =
-              activeState?.isActive && index === activeState.currentTaskIndex;
+              activeState?.isActive && index === activeState?.currentTaskIndex;
             const isCheckboxDisabled =
-              !activeState?.isActive || index !== activeState.currentTaskIndex;
-            const canCheck = !item.checked && isHighlighted;
+              !activeState?.isActive ||
+              index !== activeState?.currentTaskIndex ||
+              isTaskDisabled(item.id);
+            const canCheck =
+              !item.checked && isHighlighted && !isTaskDisabled(item.id);
+            const isDisabled = isTaskDisabled(item.id);
+            const showCancelIcon = shouldShowCancelIcon(item, index);
 
             return (
               <View
                 style={[
                   styles.taskRow,
                   isHighlighted && styles.highlightedTask,
+                  isDisabled && styles.disabledTask,
                 ]}
               >
                 {item.image && (
@@ -314,10 +448,24 @@ export default function ChecklistDetail() {
                       textDecorationLine: "line-through",
                       color: "gray",
                     },
+                    isDisabled && styles.disabledTaskText,
                   ]}
                 >
                   {item.text}
                 </Text>
+                {isDisabled && (
+                  <View style={styles.disabledIconContainer}>
+                    <Icon name="cancel" size={24} color="red" />
+                  </View>
+                )}
+                {showCancelIcon && (
+                  <TouchableOpacity
+                    onPress={() => handleCancelTask(item.id)}
+                    style={styles.cancelIconContainer}
+                  >
+                    <Icon name="close" size={24} color="red" />
+                  </TouchableOpacity>
+                )}
                 <Checkbox
                   checked={item.checked}
                   disabled={isCheckboxDisabled}
@@ -343,7 +491,7 @@ export default function ChecklistDetail() {
         </View>
       </Modal>
 
-      {/* Modal for editing checklist image */}
+      {/* Modal for editing checklist image - only in normal edit mode */}
       <Modal
         visible={checklistImageModalVisible}
         transparent
@@ -391,7 +539,8 @@ export default function ChecklistDetail() {
         </View>
       </Modal>
 
-      {isEditMode && (
+      {/* Add Task Modal - only in normal edit mode */}
+      {isNormalEdit && (
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -432,7 +581,8 @@ export default function ChecklistDetail() {
         </Modal>
       )}
 
-      {isEditMode && (
+      {/* Edit Task Modal - only in normal edit mode */}
+      {isNormalEdit && (
         <Modal visible={editModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.editModalContent}>
@@ -496,7 +646,6 @@ export default function ChecklistDetail() {
   );
 }
 
-////////////////////////////////////////////////////////////////////////
 // import * as ImagePicker from "expo-image-picker";
 // import { useLocalSearchParams, useRouter } from "expo-router";
 // import React, { useEffect, useState } from "react";
@@ -506,7 +655,6 @@ export default function ChecklistDetail() {
 //   FlatList,
 //   Image,
 //   Modal,
-//   StyleSheet,
 //   Text,
 //   TextInput,
 //   TouchableOpacity,
@@ -517,6 +665,7 @@ export default function ChecklistDetail() {
 // } from "react-native-draggable-flatlist";
 // import Icon from "react-native-vector-icons/MaterialIcons";
 // import { useChecklist } from "../../context/ChecklistProvider";
+// import { styles } from "./styles";
 
 // const Checkbox = ({ checked, onPress, disabled }) => (
 //   <TouchableOpacity
@@ -537,9 +686,13 @@ export default function ChecklistDetail() {
 //   const id = typeof params.id === "string" ? params.id : params.id?.[0];
 //   const mode =
 //     typeof params.mode === "string" ? params.mode : params.mode?.[0] || "view";
+//   const ongoing =
+//     typeof params.ongoing === "string" ? params.ongoing : params.ongoing?.[0];
 
 //   const numericId = Number(id);
 //   const isEditMode = mode === "edit";
+//   const isOngoingEdit = isEditMode && ongoing === "true";
+//   const isNormalEdit = isEditMode && !isOngoingEdit;
 
 //   const {
 //     getChecklistById,
@@ -548,9 +701,12 @@ export default function ChecklistDetail() {
 //     deleteItem,
 //     editItem,
 //     reorderItems,
+//     updateChecklistImage,
 //     startSchedule,
 //     completeCurrentTask,
 //     getActiveScheduleState,
+//     disableTask,
+//     submitScheduleChanges,
 //   } = useChecklist();
 
 //   const checklist = getChecklistById(numericId);
@@ -566,6 +722,11 @@ export default function ChecklistDetail() {
 //   const [editImageUri, setEditImageUri] = useState(null);
 //   const [activeState, setActiveState] = useState(null);
 //   const [showCongrats, setShowCongrats] = useState(false);
+//   const [checklistImageUri, setChecklistImageUri] = useState<string | null>(
+//     checklist?.image || null,
+//   );
+//   const [checklistImageModalVisible, setChecklistImageModalVisible] =
+//     useState(false);
 
 //   useEffect(() => {
 //     if (checklist) {
@@ -606,6 +767,23 @@ export default function ChecklistDetail() {
 
 //   const handleRemoveImageInEdit = () => {
 //     setEditImageUri(null);
+//   };
+
+//   const handlePickChecklistImage = async () => {
+//     const result = await ImagePicker.launchImageLibraryAsync({
+//       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+//       allowsEditing: true,
+//       quality: 0.7,
+//     });
+//     if (!result.canceled) {
+//       setChecklistImageUri(result.assets[0].uri);
+//       updateChecklistImage(checklist.id, result.assets[0].uri);
+//     }
+//   };
+
+//   const handleRemoveChecklistImage = () => {
+//     setChecklistImageUri(null);
+//     updateChecklistImage(checklist.id, null);
 //   };
 
 //   const handleAddTask = () => {
@@ -666,18 +844,72 @@ export default function ChecklistDetail() {
 //     }
 //   };
 
+//   const handleEditButtonPress = () => {
+//     Alert.alert(
+//       "Edit Ongoing Schedule",
+//       "Are you sure you want to edit an ongoing schedule?",
+//       [
+//         { text: "No", style: "cancel" },
+//         {
+//           text: "Yes",
+//           onPress: () =>
+//             router.push(`/checklist/${checklist.id}?mode=edit&ongoing=true`),
+//         },
+//       ],
+//     );
+//   };
+
+//   const handleSubmitChanges = () => {
+//     submitScheduleChanges(checklist.id);
+//     router.push(`/checklist/${checklist.id}?mode=view`);
+//   };
+
+//   const handleCancelTask = (taskId) => {
+//     disableTask(checklist.id, taskId);
+//     const newState = getActiveScheduleState(checklist.id);
+//     setActiveState(newState);
+//   };
+
+//   const isTaskDisabled = (taskId) => {
+//     return activeState?.disabledTaskIds?.includes(taskId) || false;
+//   };
+
+//   const shouldShowCancelIcon = (item, index) => {
+//     if (!isOngoingEdit) return false;
+//     if (item.checked) return false;
+//     if (isTaskDisabled(item.id)) return false;
+//     if (index <= activeState?.currentTaskIndex) return false;
+//     return true;
+//   };
+
 //   return (
 //     <View style={styles.container}>
 //       <View style={styles.headerContainer}>
-//         <Text style={styles.title}>{checklist.name}</Text>
-//         {isEditMode ? (
+//         <View style={styles.titleContainer}>
+//           {isNormalEdit && (
+//             <TouchableOpacity
+//               onPress={() => setChecklistImageModalVisible(true)}
+//               style={styles.editImageButton}
+//             >
+//               <Icon name="edit" size={20} color="#76088b" />
+//             </TouchableOpacity>
+//           )}
+//           {checklist?.image && (
+//             <Image
+//               source={{ uri: checklist.image }}
+//               style={styles.headerImage}
+//             />
+//           )}
+//           <Text style={styles.title}>{checklist.name}</Text>
+//         </View>
+//         {isNormalEdit ? (
 //           <TouchableOpacity
 //             style={styles.addTaskButton}
 //             onPress={() => setModalVisible(true)}
 //           >
 //             <Text style={styles.addTaskButtonText}>Add Task</Text>
 //           </TouchableOpacity>
-//         ) : !activeState?.isActive ? (
+//         ) : isOngoingEdit ? null : !activeState?.isActive ? (
 //           <TouchableOpacity
 //             style={styles.addTaskButton}
 //             onPress={() => {
@@ -687,14 +919,22 @@ export default function ChecklistDetail() {
 //           >
 //             <Text style={styles.addTaskButtonText}>Start Schedule</Text>
 //           </TouchableOpacity>
-//         ) : null}
+//         ) : (
+//           <TouchableOpacity
+//             style={styles.addTaskButton}
+//             onPress={handleEditButtonPress}
+//           >
+//             <Text style={styles.addTaskButtonText}>Edit</Text>
+//           </TouchableOpacity>
+//         )}
 //       </View>
 
 //       {checklist.items.length === 0 ? (
 //         <View style={styles.emptyState}>
 //           <Text style={styles.emptyText}>No tasks yet</Text>
 //         </View>
-//       ) : isEditMode ? (
+//       ) : isNormalEdit ? (
+//         // NORMAL EDIT MODE - Drag, edit, delete tasks
 //         <DraggableFlatList
 //           data={checklist.items}
 //           keyExtractor={(item) => item.id.toString()}
@@ -743,21 +983,38 @@ export default function ChecklistDetail() {
 //           )}
 //         />
 //       ) : (
+//         // VIEW MODE OR ONGOING EDIT MODE
 //         <FlatList
 //           data={checklist.items}
 //           keyExtractor={(item) => item.id.toString()}
+//           ListFooterComponent={
+//             isOngoingEdit ? (
+//               <TouchableOpacity
+//                 style={styles.submitButton}
+//                 onPress={handleSubmitChanges}
+//               >
+//                 <Text style={styles.submitButtonText}>Submit</Text>
+//               </TouchableOpacity>
+//             ) : null
+//           }
 //           renderItem={({ item, index }) => {
 //             const isHighlighted =
-//               activeState?.isActive && index === activeState.currentTaskIndex;
+//               activeState?.isActive && index === activeState?.currentTaskIndex;
 //             const isCheckboxDisabled =
-//               !activeState?.isActive || index !== activeState.currentTaskIndex;
-//             const canCheck = !item.checked && isHighlighted;
+//               !activeState?.isActive ||
+//               index !== activeState?.currentTaskIndex ||
+//               isTaskDisabled(item.id);
+//             const canCheck =
+//               !item.checked && isHighlighted && !isTaskDisabled(item.id);
+//             const isDisabled = isTaskDisabled(item.id);
+//             const showCancelIcon = shouldShowCancelIcon(item, index);
 
 //             return (
 //               <View
 //                 style={[
 //                   styles.taskRow,
 //                   isHighlighted && styles.highlightedTask,
+//                   isDisabled && styles.disabledTask,
 //                 ]}
 //               >
 //                 {item.image && (
@@ -773,10 +1030,24 @@ export default function ChecklistDetail() {
 //                       textDecorationLine: "line-through",
 //                       color: "gray",
 //                     },
+//                     isDisabled && styles.disabledTaskText,
 //                   ]}
 //                 >
 //                   {item.text}
 //                 </Text>
+//                 {isDisabled && (
+//                   <View style={styles.disabledIconContainer}>
+//                     <Icon name="cancel" size={24} color="red" />
+//                   </View>
+//                 )}
+//                 {showCancelIcon && (
+//                   <TouchableOpacity
+//                     onPress={() => handleCancelTask(item.id)}
+//                     style={styles.cancelIconContainer}
+//                   >
+//                     <Icon name="close" size={24} color="red" />
+//                   </TouchableOpacity>
+//                 )}
 //                 <Checkbox
 //                   checked={item.checked}
 //                   disabled={isCheckboxDisabled}
@@ -802,7 +1073,56 @@ export default function ChecklistDetail() {
 //         </View>
 //       </Modal>
 
-//       {isEditMode && (
+//       {/* Modal for editing checklist image - only in normal edit mode */}
+//       <Modal
+//         visible={checklistImageModalVisible}
+//         transparent
+//         animationType="slide"
+//       >
+//         <View style={styles.modalOverlay}>
+//           <View style={styles.modalContent}>
+//             <Text style={styles.modalTitle}>Edit Schedule Image</Text>
+
+//             <TouchableOpacity
+//               style={styles.imagePlaceholder}
+//               onPress={handlePickChecklistImage}
+//             >
+//               {checklistImageUri ? (
+//                 <Image
+//                   source={{ uri: checklistImageUri }}
+//                   style={styles.imagePreview}
+//                 />
+//               ) : (
+//                 <>
+//                   <Icon name="add-photo-alternate" size={40} color="gray" />
+//                   <Text style={styles.placeholderText}>
+//                     Tap to add image (optional)
+//                   </Text>
+//                 </>
+//               )}
+//             </TouchableOpacity>
+
+//             {checklistImageUri && (
+//               <TouchableOpacity
+//                 style={styles.removeImageButton}
+//                 onPress={handleRemoveChecklistImage}
+//               >
+//                 <Text style={styles.removeImageText}>Remove Image</Text>
+//               </TouchableOpacity>
+//             )}
+
+//             <View style={styles.modalButtons}>
+//               <Button
+//                 title="Close"
+//                 onPress={() => setChecklistImageModalVisible(false)}
+//               />
+//             </View>
+//           </View>
+//         </View>
+//       </Modal>
+
+//       {/* Add Task Modal - only in normal edit mode */}
+//       {isNormalEdit && (
 //         <Modal visible={modalVisible} transparent animationType="slide">
 //           <View style={styles.modalOverlay}>
 //             <View style={styles.modalContent}>
@@ -843,7 +1163,8 @@ export default function ChecklistDetail() {
 //         </Modal>
 //       )}
 
-//       {isEditMode && (
+//       {/* Edit Task Modal - only in normal edit mode */}
+//       {isNormalEdit && (
 //         <Modal visible={editModalVisible} transparent animationType="slide">
 //           <View style={styles.modalOverlay}>
 //             <View style={styles.editModalContent}>
@@ -906,174 +1227,3 @@ export default function ChecklistDetail() {
 //     </View>
 //   );
 // }
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1, padding: 20 },
-//   headerContainer: {
-//     flexDirection: "row",
-//     justifyContent: "space-between",
-//     alignItems: "center",
-//     marginBottom: 20,
-//   },
-//   title: {
-//     fontSize: 24,
-//     fontWeight: "bold",
-//     color: "#76088b",
-//     flex: 1,
-//     textAlign: "center",
-//   },
-//   addTaskButton: {
-//     backgroundColor: "#9a12b6",
-//     paddingHorizontal: 12,
-//     paddingVertical: 6,
-//     borderRadius: 6,
-//   },
-//   addTaskButtonText: {
-//     color: "white",
-//     fontSize: 14,
-//     fontWeight: "600",
-//   },
-//   emptyState: { flex: 1, justifyContent: "center", alignItems: "center" },
-//   emptyText: { fontSize: 16, color: "gray", marginBottom: 20 },
-//   taskRow: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     padding: 15,
-//     marginBottom: 10,
-//     borderWidth: 2,
-//     borderColor: "#76088b",
-//     borderRadius: 10,
-//     backgroundColor: "white",
-//   },
-//   highlightedTask: {
-//     borderColor: "#ff6b6b",
-//     borderWidth: 3,
-//     shadowColor: "#ff6b6b",
-//     shadowOffset: { width: 0, height: 0 },
-//     shadowOpacity: 0.8,
-//     shadowRadius: 10,
-//     elevation: 5,
-//   },
-//   taskText: {
-//     fontSize: 20,
-//     fontWeight: "600",
-//     flex: 1,
-//   },
-//   taskImage: {
-//     width: 50,
-//     height: 50,
-//     marginRight: 12,
-//     borderRadius: 8,
-//   },
-//   iconContainer: {
-//     flexDirection: "row",
-//     gap: 15,
-//   },
-//   modalOverlay: {
-//     flex: 1,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     backgroundColor: "rgba(0,0,0,0.3)",
-//   },
-//   modalContent: {
-//     backgroundColor: "white",
-//     padding: 20,
-//     borderRadius: 8,
-//     width: "80%",
-//   },
-//   editModalContent: {
-//     backgroundColor: "white",
-//     padding: 24,
-//     borderRadius: 12,
-//     width: "90%",
-//     maxHeight: "90%",
-//   },
-//   modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
-//   input: {
-//     borderWidth: 1,
-//     borderColor: "#ccc",
-//     borderRadius: 5,
-//     padding: 10,
-//     marginBottom: 15,
-//   },
-//   imagePlaceholder: {
-//     height: 80,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     borderWidth: 1,
-//     borderColor: "#ccc",
-//     borderRadius: 5,
-//     marginBottom: 15,
-//     position: "relative",
-//   },
-//   editImagePlaceholder: {
-//     height: 200,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     borderWidth: 1,
-//     borderColor: "#ccc",
-//     borderRadius: 8,
-//     marginBottom: 15,
-//     position: "relative",
-//     backgroundColor: "#f9f9f9",
-//   },
-//   imagePreviewContainer: {
-//     position: "relative",
-//     width: "100%",
-//     height: "100%",
-//   },
-//   imagePreview: {
-//     width: "100%",
-//     height: "100%",
-//     borderRadius: 5,
-//   },
-//   editImagePreview: {
-//     width: "100%",
-//     height: "100%",
-//     borderRadius: 8,
-//     resizeMode: "cover",
-//   },
-//   imageActionsContainer: {
-//     position: "absolute",
-//     top: 8,
-//     right: 8,
-//     flexDirection: "row",
-//     gap: 8,
-//   },
-//   imageActionButton: {
-//     backgroundColor: "rgba(0,0,0,0.6)",
-//     borderRadius: 20,
-//     width: 32,
-//     height: 32,
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-//   placeholderText: {
-//     color: "gray",
-//     fontSize: 14,
-//     marginTop: 8,
-//   },
-//   modalButtons: { flexDirection: "row", justifyContent: "space-between" },
-//   congratsOverlay: {
-//     flex: 1,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     backgroundColor: "rgba(0,0,0,0.7)",
-//   },
-//   congratsContent: {
-//     backgroundColor: "white",
-//     padding: 30,
-//     borderRadius: 20,
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-//   congratsEmoji: {
-//     fontSize: 60,
-//     marginBottom: 20,
-//   },
-//   congratsText: {
-//     fontSize: 24,
-//     fontWeight: "bold",
-//     color: "#76088b",
-//   },
-// });

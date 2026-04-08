@@ -13,7 +13,6 @@ export default function useChecklistData() {
       if (saved) {
         const parsed = JSON.parse(saved);
         setChecklists(parsed);
-        // ensure nextId continues from last
         const maxId = parsed.reduce((max, cl) => Math.max(max, cl.id), 0);
         setNextId(maxId + 1);
       }
@@ -42,7 +41,7 @@ export default function useChecklistData() {
 
   const getChecklistById = (id) => checklists.find((cl) => cl.id === id);
 
-  const createChecklist = (name) => {
+  const createChecklist = (name, imageUri = null) => {
     const newId = nextId;
     setNextId((prev) => prev + 1);
     setChecklists((prev) => [
@@ -55,14 +54,6 @@ export default function useChecklistData() {
       },
       ...prev,
     ]);
-  };
-
-  const updateChecklistImage = (checklistId, imageUri) => {
-    setChecklists((prev) =>
-      prev.map((cl) =>
-        cl.id === checklistId ? { ...cl, image: imageUri } : cl,
-      ),
-    );
   };
 
   const addItem = (checklistId, text, imageUri) => {
@@ -145,6 +136,14 @@ export default function useChecklistData() {
     );
   };
 
+  const updateChecklistImage = (checklistId, imageUri) => {
+    setChecklists((prev) =>
+      prev.map((cl) =>
+        cl.id === checklistId ? { ...cl, image: imageUri } : cl,
+      ),
+    );
+  };
+
   const resetAllTasks = (checklistId) => {
     setChecklists((prev) =>
       prev.map((cl) =>
@@ -158,17 +157,51 @@ export default function useChecklistData() {
     );
   };
 
+  const getNextActiveTaskIndex = (checklist, currentIndex, disabledTaskIds) => {
+    for (let i = currentIndex + 1; i < checklist.items.length; i++) {
+      const item = checklist.items[i];
+      if (!item.checked && !disabledTaskIds.includes(item.id)) {
+        return i;
+      }
+    }
+    return -1; // No more active tasks
+  };
+
   const startSchedule = (checklistId) => {
     const checklist = getChecklistById(checklistId);
     if (!checklist || checklist.items.length === 0) return;
+
+    // Find first non-disabled task (none disabled yet at start)
+    const firstActiveIndex = getNextActiveTaskIndex(checklist, -1, []);
 
     setActiveSchedules((prev) => ({
       ...prev,
       [checklistId]: {
         isActive: true,
-        currentTaskIndex: 0,
+        currentTaskIndex: firstActiveIndex !== -1 ? firstActiveIndex : 0,
+        disabledTaskIds: [],
       },
     }));
+  };
+
+  const disableTask = (checklistId, taskId) => {
+    setActiveSchedules((prev) => {
+      const current = prev[checklistId];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [checklistId]: {
+          ...current,
+          disabledTaskIds: [...(current.disabledTaskIds || []), taskId],
+        },
+      };
+    });
+  };
+
+  const submitScheduleChanges = (checklistId) => {
+    // Keep disabled tasks, just exit edit mode
+    // No changes to activeSchedules needed
   };
 
   const completeCurrentTask = (checklistId) => {
@@ -178,13 +211,19 @@ export default function useChecklistData() {
     const checklist = getChecklistById(checklistId);
     const currentItem = checklist.items[activeState.currentTaskIndex];
 
-    // Check off the current task
-    toggleItem(checklistId, currentItem.id);
+    // Check off the current task if not already checked
+    if (!currentItem.checked) {
+      toggleItem(checklistId, currentItem.id);
+    }
 
-    // Move to next task
-    const nextIndex = activeState.currentTaskIndex + 1;
+    // Find next active task (skip checked and disabled)
+    const nextIndex = getNextActiveTaskIndex(
+      checklist,
+      activeState.currentTaskIndex,
+      activeState.disabledTaskIds || [],
+    );
 
-    if (nextIndex >= checklist.items.length) {
+    if (nextIndex === -1) {
       // Schedule completed - reset all tasks to unchecked
       resetAllTasks(checklistId);
 
@@ -195,17 +234,17 @@ export default function useChecklistData() {
         return newState;
       });
 
-      return true; // Return true indicating schedule completed
+      return true; // Schedule completed
     } else {
       // Move to next task
       setActiveSchedules((prev) => ({
         ...prev,
         [checklistId]: {
-          isActive: true,
+          ...activeState,
           currentTaskIndex: nextIndex,
         },
       }));
-      return false; // Return false indicating not completed yet
+      return false; // Not completed yet
     }
   };
 
@@ -233,10 +272,12 @@ export default function useChecklistData() {
     reorderChecklists,
     editItem,
     reorderItems,
+    updateChecklistImage,
     startSchedule,
     completeCurrentTask,
     getActiveScheduleState,
     resetSchedule,
-    updateChecklistImage,
+    disableTask,
+    submitScheduleChanges,
   };
 }

@@ -163,7 +163,11 @@ export default function IndexScreen() {
 
                   <View style={styles.buttonContainer}>
                     {/* Edit button */}
-                    <TouchableOpacity onPress={() => openEditModal(item)}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push(`/checklist/${item.id}?mode=edit`)
+                      }
+                    >
                       <Icon name="edit" size={24} color="#007AFF" />
                     </TouchableOpacity>
 
