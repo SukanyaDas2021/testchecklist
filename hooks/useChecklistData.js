@@ -50,10 +50,19 @@ export default function useChecklistData() {
         id: newId,
         name: name || "Untitled Checklist",
         items: [],
+        image: imageUri,
         order: Date.now(),
       },
       ...prev,
     ]);
+  };
+
+  const updateChecklistImage = (checklistId, imageUri) => {
+    setChecklists((prev) =>
+      prev.map((cl) =>
+        cl.id === checklistId ? { ...cl, image: imageUri } : cl,
+      ),
+    );
   };
 
   const addItem = (checklistId, text, imageUri) => {
@@ -228,5 +237,6 @@ export default function useChecklistData() {
     completeCurrentTask,
     getActiveScheduleState,
     resetSchedule,
+    updateChecklistImage,
   };
 }

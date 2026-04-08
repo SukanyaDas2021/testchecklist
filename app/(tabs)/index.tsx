@@ -1,9 +1,11 @@
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
   Button,
+  Image,
   Modal,
   StyleSheet,
   Text,
@@ -24,16 +26,57 @@ export default function IndexScreen() {
     renameChecklist,
     deleteChecklist,
     reorderChecklists,
+    updateChecklistImage,
   } = useChecklist();
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newImageUri, setNewImageUri] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editImageUri, setEditImageUri] = useState<string | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      setNewImageUri(result.assets[0].uri);
+    }
+  };
+
+  const handleEditPickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      setEditImageUri(result.assets[0].uri);
+    }
+  };
 
   const handleCreate = () => {
-    createChecklist(newName.trim());
+    if (newName.trim().length === 0) return;
+    createChecklist(newName.trim(), newImageUri);
     setNewName("");
+    setNewImageUri(null);
     setModalVisible(false);
+  };
+
+  const handleEdit = () => {
+    if (editName.trim().length === 0) return;
+    renameChecklist(editingId, editName.trim());
+    if (editImageUri !== undefined) {
+      updateChecklistImage(editingId, editImageUri);
+    }
+    setEditModalVisible(false);
+    setEditingId(null);
+    setEditName("");
+    setEditImageUri(null);
   };
 
   const handleDelete = (id: number, name: string) => {
@@ -53,6 +96,13 @@ export default function IndexScreen() {
 
   const handleDragEnd = ({ data }: { data: typeof checklists }) => {
     reorderChecklists(data);
+  };
+
+  const openEditModal = (checklist) => {
+    setEditingId(checklist.id);
+    setEditName(checklist.name);
+    setEditImageUri(checklist.image || null);
+    setEditModalVisible(true);
   };
 
   return (
@@ -100,18 +150,20 @@ export default function IndexScreen() {
                     style={styles.checklistNameContainer}
                     onPress={() =>
                       router.push(`/checklist/${item.id}?mode=view`)
-                    } // CHANGE: Add ?mode=view
+                    }
                   >
+                    {item.image && (
+                      <Image
+                        source={{ uri: item.image }}
+                        style={styles.checklistImage}
+                      />
+                    )}
                     <Text style={styles.checklistName}>{item.name}</Text>
                   </TouchableOpacity>
 
                   <View style={styles.buttonContainer}>
                     {/* Edit button */}
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push(`/checklist/${item.id}?mode=edit`)
-                      }
-                    >
+                    <TouchableOpacity onPress={() => openEditModal(item)}>
                       <Icon name="edit" size={24} color="#007AFF" />
                     </TouchableOpacity>
 
@@ -129,7 +181,7 @@ export default function IndexScreen() {
         />
       )}
 
-      {/* Modal for naming checklist */}
+      {/* Modal for creating checklist */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -140,9 +192,83 @@ export default function IndexScreen() {
               value={newName}
               onChangeText={setNewName}
             />
+
+            <TouchableOpacity
+              style={styles.imagePlaceholder}
+              onPress={handlePickImage}
+            >
+              {newImageUri ? (
+                <Image
+                  source={{ uri: newImageUri }}
+                  style={styles.imagePreview}
+                />
+              ) : (
+                <>
+                  <Icon name="add-photo-alternate" size={40} color="gray" />
+                  <Text style={styles.placeholderText}>
+                    Tap to add image (optional)
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <View style={styles.modalButtons}>
-              <Button title="Cancel" onPress={() => setModalVisible(false)} />
+              <Button
+                title="Cancel"
+                onPress={() => {
+                  setModalVisible(false);
+                  setNewName("");
+                  setNewImageUri(null);
+                }}
+              />
               <Button title="Create" onPress={handleCreate} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal for editing checklist */}
+      <Modal visible={editModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Schedule</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter schedule name"
+              value={editName}
+              onChangeText={setEditName}
+            />
+
+            <TouchableOpacity
+              style={styles.imagePlaceholder}
+              onPress={handleEditPickImage}
+            >
+              {editImageUri ? (
+                <Image
+                  source={{ uri: editImageUri }}
+                  style={styles.imagePreview}
+                />
+              ) : (
+                <>
+                  <Icon name="add-photo-alternate" size={40} color="gray" />
+                  <Text style={styles.placeholderText}>
+                    Tap to add image (optional)
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.modalButtons}>
+              <Button
+                title="Cancel"
+                onPress={() => {
+                  setEditModalVisible(false);
+                  setEditingId(null);
+                  setEditName("");
+                  setEditImageUri(null);
+                }}
+              />
+              <Button title="Save" onPress={handleEdit} />
             </View>
           </View>
         </View>
@@ -195,10 +321,19 @@ const styles = StyleSheet.create({
   },
   checklistNameContainer: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  checklistImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
   },
   checklistName: {
     fontSize: 20,
     fontWeight: "bold",
+    flex: 1,
   },
   buttonContainer: {
     flexDirection: "row",
@@ -225,6 +360,26 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginBottom: 15,
+  },
+  imagePlaceholder: {
+    height: 80,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    marginBottom: 15,
+    position: "relative",
+  },
+  imagePreview: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 5,
+  },
+  placeholderText: {
+    color: "gray",
+    fontSize: 14,
+    marginTop: 8,
   },
   modalButtons: { flexDirection: "row", justifyContent: "space-between" },
 });
