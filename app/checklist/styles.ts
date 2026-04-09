@@ -267,4 +267,39 @@ export const styles = StyleSheet.create({
   backButtonLeft: {
     padding: 8,
   },
+  savedTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  savedTaskImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  savedTaskText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  savedTaskButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  savedTaskAddButton: {
+    backgroundColor: "#4CAF50",
+    padding: 8,
+    borderRadius: 6,
+  },
+  savedTaskDeleteButton: {
+    backgroundColor: "#ff4444",
+    padding: 8,
+    borderRadius: 6,
+  },
 });
