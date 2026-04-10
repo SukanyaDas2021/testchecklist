@@ -1,3 +1,5 @@
+import { Audio } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -90,6 +92,12 @@ export default function ChecklistDetail() {
   const [showSavedTasksModal, setShowSavedTasksModal] = useState(false);
   const [showSaveTaskDialog, setShowSaveTaskDialog] = useState(false);
   const [pendingNewTask, setPendingNewTask] = useState(null);
+  // Audio state
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [editAudioUri, setEditAudioUri] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState(null);
+  const [sound, setSound] = useState(null);
 
   useEffect(() => {
     if (checklist) {
@@ -102,6 +110,26 @@ export default function ChecklistDetail() {
     }
   }, [checklist, getActiveScheduleState, isOngoingEdit]);
 
+  // Cleanup audio on component unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  // Auto-play audio when current task changes (for ongoing schedule)
+  useEffect(() => {
+    if (activeState?.isActive && activeState?.currentTaskIndex !== undefined) {
+      const currentTask = checklist?.items[activeState.currentTaskIndex];
+      if (currentTask?.audioUri) {
+        playAudio(currentTask.audioUri);
+      }
+    }
+  }, [activeState?.currentTaskIndex, activeState?.isActive, checklist?.items]);
+
+  // ========== EARLY RETURN (after ALL hooks) ==========
   if (!checklist) {
     return (
       <View style={styles.container}>
@@ -157,7 +185,7 @@ export default function ChecklistDetail() {
     if (newTask.trim().length === 0) return;
 
     // Add task to checklist first
-    addItem(checklist.id, newTask.trim(), imageUri);
+    addItem(checklist.id, newTask.trim(), imageUri, null, audioUri);
 
     // Show confirmation dialog to save for future
     Alert.alert(
@@ -168,7 +196,7 @@ export default function ChecklistDetail() {
         {
           text: "Yes",
           onPress: () => {
-            saveTask(newTask.trim(), imageUri);
+            saveTask(newTask.trim(), imageUri, audioUri);
           },
         },
       ],
@@ -177,16 +205,24 @@ export default function ChecklistDetail() {
     // Reset modal state
     setNewTask("");
     setImageUri(null);
+    setAudioUri(null);
     setModalVisible(false);
   };
 
   const handleEditTask = () => {
     if (editTaskText.trim().length === 0) return;
-    editItem(checklist.id, editingTask.id, editTaskText.trim(), editImageUri);
+    editItem(
+      checklist.id,
+      editingTask.id,
+      editTaskText.trim(),
+      editImageUri,
+      editAudioUri,
+    );
     setEditModalVisible(false);
     setEditingTask(null);
     setEditTaskText("");
     setEditImageUri(null);
+    setEditAudioUri(null);
   };
 
   const handleDeleteTask = (itemId, taskText) => {
@@ -213,6 +249,7 @@ export default function ChecklistDetail() {
     setEditingTask(item);
     setEditTaskText(item.text);
     setEditImageUri(item.image);
+    setEditAudioUri(item.audioUri || null);
     setEditModalVisible(true);
   };
 
@@ -310,6 +347,154 @@ export default function ChecklistDetail() {
     return activeState?.disabledTaskIds?.includes(taskId) || false;
   };
 
+  // Audio Recording and Playback Functions
+  const startRecording = async () => {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Microphone permission is needed to record audio",
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+    setIsRecording(false);
+
+    if (uri) {
+      setAudioUri(uri);
+    }
+  };
+
+  const pickAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+      });
+      if (result.assets && result.assets[0]) {
+        setAudioUri(result.assets[0].uri);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick audio file");
+    }
+  };
+
+  const playAudio = async (uri) => {
+    if (!uri) return;
+
+    try {
+      // Stop any currently playing sound
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true },
+      );
+      setSound(newSound);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setSound(null);
+        }
+      });
+    } catch (err) {
+      console.log("Error playing audio:", err);
+    }
+  };
+
+  const stopAudio = async () => {
+    if (sound) {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+  };
+
+  // Edit audio functions
+  const startEditRecording = async () => {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Microphone permission is needed to record audio",
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const stopEditRecording = async () => {
+    if (!recording) return;
+
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+    setIsRecording(false);
+
+    if (uri) {
+      setEditAudioUri(uri);
+    }
+  };
+
+  const pickEditAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+      });
+      if (result.assets && result.assets[0]) {
+        setEditAudioUri(result.assets[0].uri);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick audio file");
+    }
+  };
+
+  const removeAudio = () => {
+    setAudioUri(null);
+  };
+
+  const removeEditAudio = () => {
+    setEditAudioUri(null);
+  };
+
   const shouldShowCancelIcon = (item, index) => {
     if (!isOngoingEdit) return false;
     if (item.checked) return false;
@@ -317,6 +502,7 @@ export default function ChecklistDetail() {
     if (index <= activeState?.currentTaskIndex) return false;
     return true;
   };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -474,29 +660,45 @@ export default function ChecklistDetail() {
                   isDisabled && styles.disabledTask,
                 ]}
               >
-                {item.image && (
-                  <Image
-                    source={{ uri: item.image }}
-                    style={styles.taskImage}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.taskText,
-                    item.checked && {
-                      textDecorationLine: "line-through",
-                      color: "gray",
-                    },
-                    isDisabled && styles.disabledTaskText,
-                  ]}
+                <TouchableOpacity
+                  style={styles.taskContentContainer}
+                  onPress={() => item.audioUri && playAudio(item.audioUri)}
                 >
-                  {item.text}
-                </Text>
+                  {item.image && (
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.taskImage}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.taskText,
+                      item.checked && {
+                        textDecorationLine: "line-through",
+                        color: "gray",
+                      },
+                      isDisabled && styles.disabledTaskText,
+                    ]}
+                  >
+                    {item.text}
+                  </Text>
+                </TouchableOpacity>
+
+                {item.audioUri && (
+                  <TouchableOpacity
+                    onPress={() => playAudio(item.audioUri)}
+                    style={styles.soundIcon}
+                  >
+                    <Icon name="volume-up" size={24} color="#76088b" />
+                  </TouchableOpacity>
+                )}
+
                 {isDisabled && (
                   <View style={styles.disabledIconContainer}>
                     <Icon name="cancel" size={24} color="red" />
                   </View>
                 )}
+
                 {showCancelIcon && (
                   <TouchableOpacity
                     onPress={() => handleCancelTask(item.id)}
@@ -505,6 +707,7 @@ export default function ChecklistDetail() {
                     <Icon name="close" size={24} color="red" />
                   </TouchableOpacity>
                 )}
+
                 <Checkbox
                   checked={item.checked}
                   disabled={isCheckboxDisabled}
@@ -611,6 +814,52 @@ export default function ChecklistDetail() {
                 )}
               </TouchableOpacity>
 
+              {/* Audio Recording Section for Add Task */}
+              <View style={styles.audioSection}>
+                <Text style={styles.audioLabel}>Add Audio (Optional):</Text>
+                <View style={styles.audioButtons}>
+                  {!isRecording ? (
+                    <TouchableOpacity
+                      style={styles.audioButton}
+                      onPress={startRecording}
+                    >
+                      <Icon name="mic" size={24} color="#76088b" />
+                      <Text style={styles.audioButtonText}>Record</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.audioButton}
+                      onPress={stopRecording}
+                    >
+                      <Icon name="stop" size={24} color="red" />
+                      <Text style={styles.audioButtonText}>Stop Recording</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.audioButton}
+                    onPress={pickAudio}
+                  >
+                    <Icon name="folder-open" size={24} color="#76088b" />
+                    <Text style={styles.audioButtonText}>Browse</Text>
+                  </TouchableOpacity>
+                </View>
+                {audioUri && (
+                  <View style={styles.audioAttached}>
+                    <Icon name="audiotrack" size={20} color="green" />
+                    <Text style={styles.audioAttachedText}>Audio attached</Text>
+                    <TouchableOpacity
+                      onPress={() => playAudio(audioUri)}
+                      style={styles.playButton}
+                    >
+                      <Icon name="play-circle" size={24} color="#76088b" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={removeAudio}>
+                      <Icon name="close" size={20} color="red" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.modalButtons}>
                 <Button title="Cancel" onPress={() => setModalVisible(false)} />
                 <Button title="Add" onPress={handleAddTask} />
@@ -634,6 +883,7 @@ export default function ChecklistDetail() {
                 onChangeText={setEditTaskText}
               />
 
+              {/* Image Section */}
               <TouchableOpacity
                 style={styles.editImagePlaceholder}
                 onPress={handleEditPickImage}
@@ -670,10 +920,62 @@ export default function ChecklistDetail() {
                 )}
               </TouchableOpacity>
 
+              {/* Audio Recording Section for Edit */}
+              <View style={styles.audioSection}>
+                <Text style={styles.audioLabel}>Audio (Optional):</Text>
+                <View style={styles.audioButtons}>
+                  {!isRecording ? (
+                    <TouchableOpacity
+                      style={styles.audioButton}
+                      onPress={startEditRecording}
+                    >
+                      <Icon name="mic" size={24} color="#76088b" />
+                      <Text style={styles.audioButtonText}>Record New</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.audioButton}
+                      onPress={stopEditRecording}
+                    >
+                      <Icon name="stop" size={24} color="red" />
+                      <Text style={styles.audioButtonText}>Stop Recording</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.audioButton}
+                    onPress={pickEditAudio}
+                  >
+                    <Icon name="folder-open" size={24} color="#76088b" />
+                    <Text style={styles.audioButtonText}>Browse</Text>
+                  </TouchableOpacity>
+                </View>
+                {editAudioUri && (
+                  <View style={styles.audioAttached}>
+                    <Icon name="audiotrack" size={20} color="green" />
+                    <Text style={styles.audioAttachedText}>Audio attached</Text>
+                    <TouchableOpacity
+                      onPress={() => playAudio(editAudioUri)}
+                      style={styles.playButton}
+                    >
+                      <Icon name="play-circle" size={24} color="#76088b" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={removeEditAudio}>
+                      <Icon name="close" size={20} color="red" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.modalButtons}>
                 <Button
                   title="Cancel"
-                  onPress={() => setEditModalVisible(false)}
+                  onPress={() => {
+                    setEditModalVisible(false);
+                    setEditingTask(null);
+                    setEditTaskText("");
+                    setEditImageUri(null);
+                    setEditAudioUri(null);
+                  }}
                 />
                 <Button title="Save" onPress={handleEditTask} />
               </View>

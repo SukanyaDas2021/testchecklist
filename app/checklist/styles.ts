@@ -302,4 +302,56 @@ export const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
   },
+  audioSection: {
+    marginBottom: 15,
+  },
+  audioLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#76088b",
+    marginBottom: 8,
+  },
+  audioButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 8,
+  },
+  audioButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  audioButtonText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  audioAttached: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e8f5e9",
+    padding: 8,
+    borderRadius: 6,
+    gap: 8,
+    marginTop: 5,
+  },
+  audioAttachedText: {
+    flex: 1,
+    fontSize: 12,
+    color: "green",
+  },
+  playButton: {
+    padding: 2,
+  },
+  soundIcon: {
+    marginRight: 8,
+  },
+  taskContentContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
 });

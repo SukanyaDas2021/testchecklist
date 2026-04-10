@@ -140,46 +140,46 @@ export default function IndexScreen() {
           onDragEnd={handleDragEnd}
           renderItem={({ item, drag, isActive }) => (
             <ScaleDecorator>
-              <TouchableOpacity
-                activeOpacity={1}
-                onLongPress={drag}
-                disabled={isActive}
+              <View
+                style={[
+                  styles.checklistRow,
+                  isActive && { backgroundColor: "#f0f0f0", opacity: 0.8 },
+                ]}
               >
-                <View style={styles.checklistRow}>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onLongPress={drag}
+                  disabled={isActive}
+                  style={styles.checklistNameContainer}
+                  onPress={() => router.push(`/checklist/${item.id}?mode=view`)}
+                >
+                  {item.image && (
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.checklistImage}
+                    />
+                  )}
+                  <Text style={styles.checklistName}>{item.name}</Text>
+                </TouchableOpacity>
+
+                <View style={styles.buttonContainer}>
+                  {/* Edit button */}
                   <TouchableOpacity
-                    style={styles.checklistNameContainer}
                     onPress={() =>
-                      router.push(`/checklist/${item.id}?mode=view`)
+                      router.push(`/checklist/${item.id}?mode=edit`)
                     }
                   >
-                    {item.image && (
-                      <Image
-                        source={{ uri: item.image }}
-                        style={styles.checklistImage}
-                      />
-                    )}
-                    <Text style={styles.checklistName}>{item.name}</Text>
+                    <Icon name="edit" size={24} color="#007AFF" />
                   </TouchableOpacity>
 
-                  <View style={styles.buttonContainer}>
-                    {/* Edit button */}
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push(`/checklist/${item.id}?mode=edit`)
-                      }
-                    >
-                      <Icon name="edit" size={24} color="#007AFF" />
-                    </TouchableOpacity>
-
-                    {/* Delete button */}
-                    <TouchableOpacity
-                      onPress={() => handleDelete(item.id, item.name)}
-                    >
-                      <Icon name="delete" size={24} color="red" />
-                    </TouchableOpacity>
-                  </View>
+                  {/* Delete button */}
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item.id, item.name)}
+                  >
+                    <Icon name="delete" size={24} color="red" />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             </ScaleDecorator>
           )}
         />

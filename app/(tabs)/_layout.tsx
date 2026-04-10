@@ -25,11 +25,11 @@ export default function TabLayout() {
   // The current tab is at index 1, not index 0
   const currentRoute = segments[1] || "index";
 
-  // Console log to track route changes
-  React.useEffect(() => {
-    console.log("Full segments array:", segments);
-    console.log("Current route (segments[1]):", currentRoute);
-  }, [segments, currentRoute]);
+  // // Console log to track route changes
+  // React.useEffect(() => {
+  //   console.log("Full segments array:", segments);
+  //   console.log("Current route (segments[1]):", currentRoute);
+  // }, [segments, currentRoute]);
 
   return (
     <Tabs

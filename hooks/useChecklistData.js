@@ -72,7 +72,13 @@ export default function useChecklistData() {
     ]);
   };
 
-  const addItem = (checklistId, text, imageUri, savedTaskId = null) => {
+  const addItem = (
+    checklistId,
+    text,
+    imageUri,
+    savedTaskId = null,
+    audioUri = null,
+  ) => {
     setChecklists((prev) =>
       prev.map((cl) =>
         cl.id === checklistId
@@ -86,6 +92,7 @@ export default function useChecklistData() {
                   checked: false,
                   image: imageUri,
                   savedTaskId,
+                  audioUri,
                 },
               ],
             }
@@ -133,7 +140,13 @@ export default function useChecklistData() {
     setChecklists(newOrder);
   };
 
-  const editItem = (checklistId, itemId, newText, newImageUri) => {
+  const editItem = (
+    checklistId,
+    itemId,
+    newText,
+    newImageUri,
+    newAudioUri = null,
+  ) => {
     setChecklists((prev) =>
       prev.map((cl) =>
         cl.id === checklistId
@@ -141,7 +154,12 @@ export default function useChecklistData() {
               ...cl,
               items: cl.items.map((item) =>
                 item.id === itemId
-                  ? { ...item, text: newText, image: newImageUri }
+                  ? {
+                      ...item,
+                      text: newText,
+                      image: newImageUri,
+                      audioUri: newAudioUri,
+                    }
                   : item,
               ),
             }
@@ -272,11 +290,12 @@ export default function useChecklistData() {
   };
 
   // Saved Tasks functions
-  const saveTask = (text, imageUri) => {
+  const saveTask = (text, imageUri, audioUri = null) => {
     const newTask = {
       id: Date.now(),
       text: text.trim(),
       image: imageUri || null,
+      audioUri: audioUri || null,
       createdAt: Date.now(),
     };
     setSavedTasks((prev) => [newTask, ...prev]);
@@ -291,18 +310,27 @@ export default function useChecklistData() {
     setSavedTasks((prev) => prev.filter((task) => task.id !== taskId));
   };
 
-  const updateSavedTask = (taskId, newText, newImageUri) => {
+  const updateSavedTask = (
+    taskId,
+    newText,
+    newImageUri,
+    newAudioUri = null,
+  ) => {
     setSavedTasks((prev) =>
       prev.map((task) =>
         task.id === taskId
-          ? { ...task, text: newText.trim(), image: newImageUri || null }
+          ? {
+              ...task,
+              text: newText.trim(),
+              image: newImageUri || null,
+              audioUri: newAudioUri || null,
+            }
           : task,
       ),
     );
   };
 
   const isSavedTaskInUse = (savedTaskId) => {
-    // Check all checklists for any task that has this savedTaskId
     for (const checklist of checklists) {
       for (const item of checklist.items) {
         if (item.savedTaskId === savedTaskId) {
@@ -339,8 +367,7 @@ export default function useChecklistData() {
   };
 }
 
-////////////////////////////////////////
-
+///////////////////////////////////////////////////////////////
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { useEffect, useState } from "react";
 
@@ -415,7 +442,7 @@ export default function useChecklistData() {
 //     ]);
 //   };
 
-//   const addItem = (checklistId, text, imageUri) => {
+//   const addItem = (checklistId, text, imageUri, savedTaskId = null) => {
 //     setChecklists((prev) =>
 //       prev.map((cl) =>
 //         cl.id === checklistId
@@ -423,7 +450,13 @@ export default function useChecklistData() {
 //               ...cl,
 //               items: [
 //                 ...cl.items,
-//                 { id: Date.now(), text, checked: false, image: imageUri },
+//                 {
+//                   id: Date.now(),
+//                   text,
+//                   checked: false,
+//                   image: imageUri,
+//                   savedTaskId,
+//                 },
 //               ],
 //             }
 //           : cl,
@@ -628,6 +661,28 @@ export default function useChecklistData() {
 //     setSavedTasks((prev) => prev.filter((task) => task.id !== taskId));
 //   };
 
+//   const updateSavedTask = (taskId, newText, newImageUri) => {
+//     setSavedTasks((prev) =>
+//       prev.map((task) =>
+//         task.id === taskId
+//           ? { ...task, text: newText.trim(), image: newImageUri || null }
+//           : task,
+//       ),
+//     );
+//   };
+
+//   const isSavedTaskInUse = (savedTaskId) => {
+//     // Check all checklists for any task that has this savedTaskId
+//     for (const checklist of checklists) {
+//       for (const item of checklist.items) {
+//         if (item.savedTaskId === savedTaskId) {
+//           return true;
+//         }
+//       }
+//     }
+//     return false;
+//   };
+
 //   return {
 //     checklists,
 //     getChecklistById,
@@ -649,5 +704,7 @@ export default function useChecklistData() {
 //     saveTask,
 //     getSavedTasks,
 //     deleteSavedTask,
+//     updateSavedTask,
+//     isSavedTaskInUse,
 //   };
 // }

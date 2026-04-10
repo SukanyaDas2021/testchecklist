@@ -1,3 +1,5 @@
+import { Audio } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -34,6 +36,10 @@ export default function TasksScreen() {
   const [editText, setEditText] = useState("");
   const [editImageUri, setEditImageUri] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [editAudioUri, setEditAudioUri] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState(null);
+  const [sound, setSound] = useState(null);
 
   useEffect(() => {
     loadTasks();
@@ -117,11 +123,17 @@ export default function TasksScreen() {
 
   const handleSaveEdit = () => {
     if (editText.trim().length === 0) return;
-    updateSavedTask(editingTask.id, editText.trim(), editImageUri);
+    updateSavedTask(
+      editingTask.id,
+      editText.trim(),
+      editImageUri,
+      editAudioUri,
+    );
     setEditModalVisible(false);
     setEditingTask(null);
     setEditText("");
     setEditImageUri(null);
+    setEditAudioUri(null);
     loadTasks();
   };
 
@@ -141,6 +153,120 @@ export default function TasksScreen() {
     setEditImageUri(null);
   };
 
+  // Audio Recording and Playback Functions
+  const startRecording = async () => {
+    try {
+      // Request permissions
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Microphone permission is needed to record audio",
+        );
+        return;
+      }
+
+      // Clean up any existing recording first
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        setRecording(null);
+      }
+
+      // Small delay to ensure cleanup completes
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Start new recording
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+
+      setRecording(newRecording);
+      setIsRecording(true);
+      console.log("Recording started successfully");
+    } catch (err) {
+      console.error("Failed to start recording", err);
+      Alert.alert("Error", "Failed to start recording. Please try again.");
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+    setIsRecording(false);
+
+    if (uri) {
+      setEditAudioUri(uri);
+    }
+  };
+
+  const pickAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+      });
+      if (result.assets && result.assets[0]) {
+        setEditAudioUri(result.assets[0].uri);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick audio file");
+    }
+  };
+
+  const playAudio = async (uri) => {
+    if (!uri) return;
+
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true },
+      );
+      setSound(newSound);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setSound(null);
+        }
+      });
+    } catch (err) {
+      console.log("Error playing audio:", err);
+    }
+  };
+
+  const removeEditAudio = () => {
+    setEditAudioUri(null);
+  };
+
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const openEditModal = (task) => {
+    setEditingTask(task);
+    setEditText(task.text);
+    setEditImageUri(task.image || null);
+    setEditAudioUri(task.audioUri || null);
+    setEditModalVisible(true);
+  };
+
   const renderTaskItem = ({ item }) => {
     const inUse = isSavedTaskInUse(item.id);
 
@@ -150,9 +276,19 @@ export default function TasksScreen() {
           <Image source={{ uri: item.image }} style={styles.taskImage} />
         )}
         <View style={styles.taskContent}>
-          <Text style={[styles.taskText, inUse && styles.taskTextInUse]}>
-            {item.text}
-          </Text>
+          <View style={styles.taskTextRow}>
+            <Text style={[styles.taskText, inUse && styles.taskTextInUse]}>
+              {item.text}
+            </Text>
+            {item.audioUri && (
+              <TouchableOpacity
+                onPress={() => playAudio(item.audioUri)}
+                style={styles.soundIcon}
+              >
+                <Icon name="volume-up" size={20} color="#76088b" />
+              </TouchableOpacity>
+            )}
+          </View>
           {inUse && <Text style={styles.inUseBadge}>In use</Text>}
         </View>
         <View style={styles.taskActions}>
@@ -319,6 +455,52 @@ export default function TasksScreen() {
                 <Text style={styles.removeImageText}>Remove Image</Text>
               </TouchableOpacity>
             )}
+
+            {/* Audio Recording Section */}
+            <View style={styles.audioSection}>
+              <Text style={styles.audioLabel}>Audio (Optional):</Text>
+              <View style={styles.audioButtons}>
+                {!isRecording ? (
+                  <TouchableOpacity
+                    style={styles.audioButton}
+                    onPress={startRecording}
+                  >
+                    <Icon name="mic" size={24} color="#76088b" />
+                    <Text style={styles.audioButtonText}>Record</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.audioButton}
+                    onPress={stopRecording}
+                  >
+                    <Icon name="stop" size={24} color="red" />
+                    <Text style={styles.audioButtonText}>Stop Recording</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.audioButton}
+                  onPress={pickAudio}
+                >
+                  <Icon name="folder-open" size={24} color="#76088b" />
+                  <Text style={styles.audioButtonText}>Browse</Text>
+                </TouchableOpacity>
+              </View>
+              {editAudioUri && (
+                <View style={styles.audioAttached}>
+                  <Icon name="audiotrack" size={20} color="green" />
+                  <Text style={styles.audioAttachedText}>Audio attached</Text>
+                  <TouchableOpacity
+                    onPress={() => playAudio(editAudioUri)}
+                    style={styles.playButton}
+                  >
+                    <Icon name="play-circle" size={24} color="#76088b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={removeEditAudio}>
+                    <Icon name="close" size={20} color="red" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
 
             <View style={styles.modalButtons}>
               <Button
@@ -545,5 +727,58 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
+  },
+  audioSection: {
+    marginBottom: 15,
+  },
+  audioLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#76088b",
+    marginBottom: 8,
+  },
+  audioButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 8,
+  },
+  audioButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  audioButtonText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  audioAttached: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e8f5e9",
+    padding: 8,
+    borderRadius: 6,
+    gap: 8,
+    marginTop: 5,
+  },
+  audioAttachedText: {
+    flex: 1,
+    fontSize: 12,
+    color: "green",
+  },
+  playButton: {
+    padding: 2,
+  },
+  soundIcon: {
+    marginLeft: 8,
+    marginRight: 20,
+  },
+  taskTextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 });
