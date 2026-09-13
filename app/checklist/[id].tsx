@@ -28,7 +28,7 @@ const Checkbox = ({ checked, onPress, disabled }) => (
   >
     <Icon
       name={checked ? "check-box" : "check-box-outline-blank"}
-      size={24}
+      size={45}
       color={disabled ? "#ccc" : "#76088b"}
     />
   </TouchableOpacity>
@@ -122,8 +122,13 @@ export default function ChecklistDetail() {
   // Auto-play audio when current task changes (for ongoing schedule)
   useEffect(() => {
     if (activeState?.isActive && activeState?.currentTaskIndex !== undefined) {
+      // Don't play audio if schedule is completed or congratulatory modal is showing
+      if (showCongrats) {
+        return;
+      }
       const currentTask = checklist?.items[activeState.currentTaskIndex];
-      if (currentTask?.audioUri) {
+      // Only play audio if task exists and hasn't been completed
+      if (currentTask?.audioUri && !currentTask.checked) {
         playAudio(currentTask.audioUri);
       }
     }
@@ -295,13 +300,22 @@ export default function ChecklistDetail() {
             onPress: () => {
               setTempDisabledTaskIds([]);
               setHasUnsavedChanges(false);
-              router.back(); //router.replace(`/checklist/${checklist.id}?mode=view`);
+              try
+               { router.back();
+               }
+               catch {
+                 router.replace("/(tabs)");
+               } //router.replace(`/checklist/${checklist.id}?mode=view`);
             },
           },
         ],
       );
     } else {
-      router.back(); //router.replace(`/checklist/${checklist.id}?mode=view`);
+      try {
+        router.back();
+      } catch {
+        router.replace("/(tabs)");
+      } //router.replace(`/checklist/${checklist.id}?mode=view`);
     }
   };
 
@@ -583,6 +597,8 @@ export default function ChecklistDetail() {
           keyExtractor={(item) => item.id.toString()}
           onDragEnd={handleDragEnd}
           onDragBegin={() => setDragging(true)}
+          // contentContainerStyle={{ paddingBottom: 100 }}
+          ListFooterComponent={<View style={{ height: 80 }} />}
           renderItem={({ item, drag, isActive }) => (
             <ScaleDecorator>
               <TouchableOpacity
@@ -689,7 +705,7 @@ export default function ChecklistDetail() {
                     onPress={() => playAudio(item.audioUri)}
                     style={styles.soundIcon}
                   >
-                    <Icon name="volume-up" size={24} color="#76088b" />
+                    {/* <Icon name="volume-up" size={24} color="#76088b" /> */}
                   </TouchableOpacity>
                 )}
 

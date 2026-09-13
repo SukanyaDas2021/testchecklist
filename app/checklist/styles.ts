@@ -2,6 +2,7 @@ import { Dimensions, StyleSheet } from "react-native";
 
 const { width } = Dimensions.get("window");
 const imageSize = width * 0.12; // 12% of screen width
+const titleFontSize = width * 0.055; // Adjust percentage as needed
 
 export const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
@@ -12,7 +13,7 @@ export const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: titleFontSize, //24,
     fontWeight: "bold",
     color: "#76088b",
     flex: 1,
@@ -34,7 +35,7 @@ export const styles = StyleSheet.create({
   taskRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
+    padding: 25,
     marginBottom: 10,
     borderWidth: 2,
     borderColor: "#76088b",
@@ -43,7 +44,7 @@ export const styles = StyleSheet.create({
   },
   highlightedTask: {
     borderColor: "#ff6b6b",
-    borderWidth: 3,
+    borderWidth: 7,
     shadowColor: "#ff6b6b",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
@@ -56,8 +57,8 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   taskImage: {
-    width: 50,
-    height: 50,
+    width: 80,
+    height: 80,
     marginRight: 12,
     borderRadius: 8,
   },
@@ -186,7 +187,7 @@ export const styles = StyleSheet.create({
     marginRight: 8,
   },
   editImageButton: {
-    padding: 4,
+    padding: 2,
   },
   removeImageButton: {
     backgroundColor: "#ff4444",
@@ -206,6 +207,26 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
+  // leftContainer: {
+  //   width: width * 0.1, //50,
+  //   alignItems: "flex-start",
+  // },
+  leftContainer: {
+    position: "absolute",
+    left: width * 0.08, // 3% from left edge
+    top: 0,
+    bottom: 0,
+    //justifyContent: "center",
+  },
+  rightContainer: {
+    width: 90,
+    alignItems: "flex-end",
+    paddingTop: 16,
+    paddingRight: 2,
+  },
+  backButtonLeft: {
+    padding: width * 0.02, //4,
+  },
   headerImage: {
     width: 40,
     height: 40,
@@ -214,7 +235,7 @@ export const styles = StyleSheet.create({
     marginTop: 16,
   },
   editImageButton: {
-    padding: 4,
+    padding: 2,
   },
   removeImageButton: {
     backgroundColor: "#ff4444",
@@ -254,19 +275,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  leftContainer: {
-    width: 50,
-    alignItems: "flex-start",
-  },
-  rightContainer: {
-    width: 90,
-    alignItems: "flex-end",
-    paddingTop: 16,
-    paddingRight: 2,
-  },
-  backButtonLeft: {
-    padding: 8,
-  },
+
   savedTaskRow: {
     flexDirection: "row",
     alignItems: "center",

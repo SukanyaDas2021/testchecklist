@@ -13,12 +13,21 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useChecklist } from "../../context/ChecklistProvider";
+import { useTabBar } from "../../context/TabBarContext";
 
 export default function TasksScreen() {
+  const { tabBarHeight } = useTabBar();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = tabBarHeight + insets.bottom + 16;
+  const bottomMargin = tabBarHeight + insets.bottom;
+  const { height: screenHeight } = useWindowDimensions();
+  const listHeight = screenHeight * 0.6;
   const router = useRouter();
   const {
     getSavedTasks,
@@ -317,7 +326,7 @@ export default function TasksScreen() {
       colors={["#d2fcfc", "#ffc6d0", "#f7fcb5"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { paddingBottom: bottomMargin }]}
     >
       {/* Header with back arrow - Modified heading style */}
       <View style={styles.header}>
@@ -394,7 +403,7 @@ export default function TasksScreen() {
 
       {/* Tasks List */}
       {sortedFilteredTasks.length === 0 ? (
-        <View style={styles.emptyState}>
+        <View style={[styles.emptyState, { paddingBottom: bottomMargin }]}>
           <Icon name="folder-open" size={60} color="#ccc" />
           <Text style={styles.emptyText}>
             {searchQuery ? "No matching tasks found" : "No saved tasks yet"}
@@ -405,10 +414,14 @@ export default function TasksScreen() {
         </View>
       ) : (
         <FlatList
+          style={{ height: listHeight }}
           data={sortedFilteredTasks}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderTaskItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: bottomPadding },
+          ]} // Add padding bottom
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={onRefresh}

@@ -11,15 +11,22 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import DraggableFlatList, {
   ScaleDecorator,
 } from "react-native-draggable-flatlist";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useChecklist } from "../../context/ChecklistProvider";
+import { useTabBar } from "../../context/TabBarContext";
 
 export default function IndexScreen() {
+  const { tabBarHeight } = useTabBar();
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+  const listHeight = screenHeight * 0.6;
   const {
     checklists,
     createChecklist,
@@ -36,6 +43,8 @@ export default function IndexScreen() {
   const [editName, setEditName] = useState("");
   const [editImageUri, setEditImageUri] = useState<string | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const bottomPadding = tabBarHeight + insets.bottom + 16;
+  const bottomMargin = tabBarHeight + insets.bottom - 20;
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -110,9 +119,9 @@ export default function IndexScreen() {
       colors={["#d2fcfc", "#ffc6d0", "#f7fcb5"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { marginBottom: bottomMargin }]}
     >
-      <LinearGradient
+      {/* <LinearGradient
         colors={["#e7e2eb", "#dcb8fd77"]}
         locations={[0, 0.95]}
         start={{ x: 0, y: 0 }}
@@ -120,7 +129,7 @@ export default function IndexScreen() {
         style={styles.titleContainer}
       >
         <Text style={styles.title}>My Schedules</Text>
-      </LinearGradient>
+      </LinearGradient> */}
 
       <TouchableOpacity
         style={styles.createButton}
@@ -130,14 +139,19 @@ export default function IndexScreen() {
       </TouchableOpacity>
 
       {checklists.length === 0 ? (
-        <View style={styles.emptyState}>
+        <View style={[styles.emptyState, { paddingBottom: bottomPadding }]}>
           <Text style={styles.emptyText}>No Schedules yet</Text>
         </View>
       ) : (
         <DraggableFlatList
+          style={{ height: listHeight }}
           data={checklists}
           keyExtractor={(cl) => cl.id.toString()}
           onDragEnd={handleDragEnd}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: bottomPadding },
+          ]}
           renderItem={({ item, drag, isActive }) => (
             <ScaleDecorator>
               <View
